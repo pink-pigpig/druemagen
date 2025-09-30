@@ -1,20 +1,115 @@
+// src/router/index.ts
 import { createRouter, createWebHashHistory, RouteRecordRaw } from 'vue-router'
-import HomeView from '../views/HomeView.vue'
+import type { DefineComponent } from 'vue'
 
 const routes: Array<RouteRecordRaw> = [
   {
     path: '/',
     name: 'home',
-    component: HomeView
+    component: () => import('../views/HomeView.vue').then(m => m.default || m) as Promise<DefineComponent>
+  },
+  {
+    path: '/user',
+    name: 'homer',
+    component: () => import('../views/UserView/HomeView.vue').then(m => m.default || m) as Promise<DefineComponent>,
+    children: [
+      {
+        path: 'center',
+        name: 'Center',
+        component: () => import('../views/UserView/CenterView.vue').then(m => m.default || m) as Promise<DefineComponent>
+      },
+      // 药店管理 - 药店库存
+      {
+        path: 'drugstore/inventory-query',
+        name: 'InventoryQuery',
+        component: () => import('../views/DrugStore/InventoryQuery.vue').then(m => m.default || m) as Promise<DefineComponent>
+      },
+      {
+        path: 'drugstore/stock-in',
+        name: 'StockIn',
+        component: () => import('../views/DrugStore/StockIn.vue').then(m => m.default || m) as Promise<DefineComponent>
+      },
+      {
+        path: 'drugstore/stock-out',
+        name: 'StockOut',
+        component: () => import('../views/DrugStore/StockOut.vue').then(m => m.default || m) as Promise<DefineComponent>
+      },
+      // 药店管理 - 药店销售
+      {
+        path: 'drugstore/scan-sale',
+        name: 'ScanSale',
+        component: () => import('../views/DrugStore/ScanSale.vue').then(m => m.default || m) as Promise<DefineComponent>
+      },
+      {
+        path: 'drugstore/manual-sale',
+        name: 'ManualSale',
+        component: () => import('../views/DrugStore/ManualSale.vue').then(m => m.default || m) as Promise<DefineComponent>
+      },
+      {
+        path: 'drugstore/cashier',
+        name: 'Cashier',
+        component: () => import('../views/DrugStore/CashierPage.vue').then(m => m.default || m) as Promise<DefineComponent>
+      },
+      {
+        path: 'drugstore/sales-records',
+        name: 'SalesRecords',
+        component: () => import('../views/DrugStore/SalesRecords.vue').then(m => m.default || m) as Promise<DefineComponent>
+      },
+      // 数据统计
+      {
+        path: 'statistics/sales-stats',
+        name: 'SalesStats',
+        component: () => import('../views/Statistics/SalesStats.vue').then(m => m.default || m) as Promise<DefineComponent>
+      },
+      {
+        path: 'statistics/hot-sales-stats',
+        name: 'HotSalesStats',
+        component: () => import('../views/Statistics/HotSalesStats.vue').then(m => m.default || m) as Promise<DefineComponent>
+      },
+      // 设置
+      {
+        path: 'settings/stock-settings',
+        name: 'StockSettings',
+        component: () => import('../views/Settings/StockSettings.vue').then(m => m.default || m) as Promise<DefineComponent>
+      },
+      {
+        path: 'settings/stats-settings',
+        name: 'StatsSettings',
+        component: () => import('../views/Settings/StatsSettings.vue').then(m => m.default || m) as Promise<DefineComponent>
+      },
+      // 系统管理
+      {
+        path: 'system/user-management',
+        name: 'UserManagement',
+        component: () => import('../views/System/UserManagement.vue').then(m => m.default || m) as Promise<DefineComponent>
+      },
+      {
+        path: 'system/role-management',
+        name: 'RoleManagement',
+        component: () => import('../views/System/RoleManagement.vue').then(m => m.default || m) as Promise<DefineComponent>
+      },
+      {
+        path: 'system/my-profile',
+        name: 'MyProfile',
+        component: () => import('../views/System/MyProfile.vue').then(m => m.default || m) as Promise<DefineComponent>
+      }
+    ]
   },
   {
     path: '/about',
     name: 'about',
-    // route level code-splitting
-    // this generates a separate chunk (about.[hash].js) for this route
-    // which is lazy-loaded when the route is visited.
-    component: () => import(/* webpackChunkName: "about" */ '../views/AboutView.vue')
-  }
+    component: () => import(/* webpackChunkName: "about" */ '../views/AboutView.vue').then(m => m.default || m) as Promise<DefineComponent>
+  },
+  {
+    path: '/login',
+    name: 'login',
+    component: () => import('../views/UserLogin.vue').then(m => m.default || m) as Promise<DefineComponent>
+  },
+  {
+    path: '/register',
+    name: 'register',
+    component: () => import('../views/UserRegister.vue').then(m => m.default || m) as Promise<DefineComponent>
+  },
 ]
 
 const router = createRouter({
