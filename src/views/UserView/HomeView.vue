@@ -2,18 +2,17 @@
   <el-container class="layout-container-demo" style="height: 100vh">
     <el-header style="text-align: right; font-size: 12px">
       <!-- 添加系统标题 -->
-      <div class="system-title">XX系统</div>
-      <el-button type="primary">主要操作</el-button>
+      <div class="system-title">蓝湖智药</div>
+      <el-button type="primary">我的</el-button>
       <div class="toolbar">
         <el-dropdown>
-          <el-icon style="margin-right: 8px; margin-top: px">
+          <el-icon class="is-loading" style="margin-right: 8px; margin-top: px; font-size: 20px;">
             <setting />
           </el-icon>
           <template #dropdown>
             <el-dropdown-menu>
-              <el-dropdown-item>查看</el-dropdown-item>
-              <el-dropdown-item>添加</el-dropdown-item>
-              <el-dropdown-item>删除</el-dropdown-item>
+              <el-dropdown-item  @click="switchAccount">切换账号</el-dropdown-item>
+              <el-dropdown-item @click="logout">退出登录</el-dropdown-item>
             </el-dropdown-menu>
           </template>
         </el-dropdown>
@@ -118,6 +117,7 @@
 import { ref } from 'vue'
 import { Menu as IconMenu, Message, Setting ,Monitor } from '@element-plus/icons-vue'
 import { useRouter } from 'vue-router'
+import axios from 'axios'
 
 
 const router = useRouter()
@@ -128,6 +128,78 @@ const navigateTo = (name: string) => {
 // 新增：为每个菜单项添加具体的路由导航
 const goToRoute = (routeName: string) => {
   router.push({ name: routeName })
+}
+
+
+// 切换账号功能
+const switchAccount = async () => {
+  try {
+    // 获取当前token
+    const currentToken = localStorage.getItem('userToken')
+    
+    if (!currentToken) {
+      // 如果没有token，直接跳转到登录页
+      router.push('/login')
+      return
+    }
+    
+    // 这里需要获取新账号信息，可以通过弹窗或其他方式
+    // 示例：假设我们有新账号信息
+    const newAccountInfo = {
+      username: 'newUsername', // 需要实际获取
+      password: 'newPassword'  // 需要实际获取
+    }
+    
+    // 调用后端切换账号接口
+    const response = await axios.post('/switch-account', newAccountInfo, {
+      headers: {
+        'token': currentToken
+      }
+    })
+    
+    if (response.data.code === 1) { // 假设1表示成功
+      // 更新本地存储的token
+      localStorage.setItem('userToken', response.data.data)
+      // 可以更新其他用户信息
+      // localStorage.setItem('username', newUsername)
+      
+      // 刷新页面或重新加载用户信息
+      window.location.reload()
+    } else {
+      console.error('切换账号失败:', response.data.msg)
+    }
+  } catch (error) {
+    console.error('切换账号请求失败:', error)
+  }
+}
+
+// 退出登录功能
+const logout = async () => {
+  try {
+    const token = localStorage.getItem('userToken')
+    if (token) {
+      // 调用后端退出登录接口
+      await axios.post('/logout', {}, {
+        headers: {
+          'token': token
+        }
+      })
+    }
+ // 清除本地存储的用户信息
+    localStorage.removeItem('userToken')
+    localStorage.removeItem('userId')
+    localStorage.removeItem('username')
+    
+    // 跳转到登录页面
+    router.push('/login')
+  }catch (error) {
+    console.error('退出登录失败:', error)
+    // 即使后端调用失败，也清除本地信息并跳转到登录页
+    localStorage.removeItem('userToken')
+    localStorage.removeItem('userId')
+    localStorage.removeItem('username')
+    router.push('/login')
+  }
 }
 </script>
 

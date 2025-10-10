@@ -143,10 +143,24 @@ const activities = ref([
   }
 ])
 
+interface ServiceDetail {
+  name: string
+  status: string
+  lastCheck: string
+  responseTime: number
+  availability: string
+  avgResponseTime: number
+}
 // 对话框控制
 const dialogVisible = ref(false)
-const currentService = ref({})
-
+const currentService = ref<ServiceDetail>({
+  name: '',
+  status: '',
+  lastCheck: '',
+  responseTime: 0,
+  availability: '',
+  avgResponseTime: 0
+})
 // 返回上一页
 const goBack = () => {
   router.back()

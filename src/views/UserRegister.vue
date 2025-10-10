@@ -1,9 +1,72 @@
-<!-- src/views/Register.vue -->
+<script setup>
+import { reactive, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import axios from 'axios'
+import { ElMessageBox } from 'element-plus'
+
+const router = useRouter()
+
+const registerForm = reactive({
+  username: '',
+  email: '',
+  password: '',
+  confirmPassword: ''
+})
+
+// 控制弹窗显示的响应式变量
+const dialogVisible = ref(false)
+// 错误信息
+const errorMessage = ref('')
+
+const handleRegister = async () => {
+  if (registerForm.password !== registerForm.confirmPassword) {
+    errorMessage.value = '两次输入的密码不一致'
+    return
+  }
+
+  try {
+    const response = await axios.post('/api/users/register', {
+      username: registerForm.username,
+      email: registerForm.email,
+      password: registerForm.password
+    })
+    
+    if (response.status === 200) {
+      // 清除错误信息并显示成功弹窗
+      errorMessage.value = ''
+      dialogVisible.value = true
+    } else {
+      errorMessage.value = response.data || '注册失败'
+    }
+  } catch (error) {
+    errorMessage.value = error.response?.data || '注册失败'
+  }
+}
+
+// 弹窗关闭前的确认处理函数
+const handleClose = (done) => {
+  ElMessageBox.confirm('确定要关闭这个对话框吗？')
+    .then(() => {
+      done()
+    })
+    .catch(() => {
+      // 取消关闭
+    })
+}
+
+// 弹窗确认按钮处理函数
+const handleDialogConfirm = () => {
+  dialogVisible.value = false
+  router.push('/login')
+}
+</script>
+
 <template>
   <div class="register-container">
     <div class="register-form">
       <h2>用户注册</h2>
       <form @submit.prevent="handleRegister">
+        
         <div class="form-group">
           <label for="username">用户名</label>
           <input 
@@ -47,6 +110,10 @@
             required
           />
         </div>
+        <!-- 显示错误信息 -->
+         <div v-if="errorMessage" class="error-message">
+          {{ errorMessage }}
+        </div>
         
         <button type="submit" class="register-button">注册</button>
       </form>
@@ -56,29 +123,25 @@
       </div>
     </div>
   </div>
+
+  <!-- 修改为新的对话框样式 -->
+  <el-dialog
+    v-model="dialogVisible"
+    title="注册成功"
+    width="500"
+    :before-close="handleClose"
+  >
+    <span>注册成功！您可以现在登录了。</span>
+    <template #footer>
+      <div class="dialog-footer">
+        <!-- <el-button @click="dialogVisible = false">取消</el-button> -->
+        <el-button type="primary" @click="handleDialogConfirm">
+          确定
+        </el-button>
+      </div>
+    </template>
+  </el-dialog>
 </template>
-
-<script setup>
-import { reactive } from 'vue'
-import { useRouter } from 'vue-router'
-
-const router = useRouter()
-
-const registerForm = reactive({
-  username: '',
-  email: '',
-  password: '',
-  confirmPassword: ''
-})
-
-const handleRegister = () => {
-  // 这里可以添加注册逻辑
-  console.log('注册信息:', registerForm)
-  
-  // 模拟注册成功，跳转到登录页面
-  router.push('/login')
-}
-</script>
 
 <style lang="scss" scoped>
 .register-container {
@@ -156,5 +219,22 @@ const handleRegister = () => {
       }
     }
   }
+}
+
+/* 错误信息样式 */
+.error-message {
+  color: #f56c6c;
+  background-color: #fef0f0;
+  border: 1px solid #fde2e2;
+  padding: 10px;
+  border-radius: 4px;
+  margin-bottom: 15px;
+  text-align: center;
+}
+
+.dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
 }
 </style>

@@ -39,6 +39,7 @@
 <script setup>
 import { reactive } from 'vue'
 import { useRouter } from 'vue-router'
+import axios from 'axios' // 需要引入axios
 
 const router = useRouter()
 
@@ -47,12 +48,34 @@ const loginForm = reactive({
   password: ''
 })
 
-const handleLogin = () => {
-  // 这里可以添加登录逻辑
-  console.log('登录信息:', loginForm)
-  
-  // 模拟登录成功，跳转到首页
-  router.push('/user')
+const handleLogin = async () => {
+  try {
+    const response = await axios.post('/api/users/login', {
+      username: loginForm.username,
+      password: loginForm.password
+    })
+    
+      // 处理登录响应
+    if (response.data.code === 1) { // 假设1表示成功
+      const userData = response.data.data
+      console.log('登录成功:', userData)
+      alert('登录成功')
+      
+      // 存储JWT token（可以存到localStorage或sessionStorage）
+      localStorage.setItem('userToken', userData.token)
+      localStorage.setItem('userId', userData.id)
+      localStorage.setItem('username', userData.userName)
+      
+      // 跳转到用户页面
+      router.push('/user')
+    } else {
+      console.error('登录失败:', response.data.msg)
+      // 可以添加错误提示
+    }
+  } catch (error) {
+    console.error('登录请求失败:', error)
+    // 可以添加网络错误提示
+  }
 }
 </script>
 
