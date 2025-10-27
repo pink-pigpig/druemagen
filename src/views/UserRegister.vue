@@ -1,5 +1,5 @@
 <script setup>
-import { reactive, ref } from 'vue'
+import { reactive, ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import axios from 'axios'
 import { ElMessageBox } from 'element-plus'
@@ -10,13 +10,21 @@ const registerForm = reactive({
   username: '',
   email: '',
   password: '',
-  confirmPassword: ''
+  confirmPassword: '',
+  userType: 'user' // 添加默认用户类型
 })
 
 // 控制弹窗显示的响应式变量
 const dialogVisible = ref(false)
 // 错误信息
 const errorMessage = ref('')
+
+// 计算属性：根据用户类型确定API端点
+const registerEndpoint = computed(() => {
+  return registerForm.userType === 'admin' 
+    ? '/api/admin/register' 
+    : '/api/users/register'
+})
 
 const handleRegister = async () => {
   if (registerForm.password !== registerForm.confirmPassword) {
@@ -25,7 +33,7 @@ const handleRegister = async () => {
   }
 
   try {
-    const response = await axios.post('/api/users/register', {
+    const response = await axios.post(registerEndpoint.value, {
       username: registerForm.username,
       email: registerForm.email,
       password: registerForm.password
@@ -66,6 +74,18 @@ const handleDialogConfirm = () => {
     <div class="register-form">
       <h2>用户注册</h2>
       <form @submit.prevent="handleRegister">
+        
+        <!-- 添加用户类型选择 -->
+        <div class="form-group">
+          <label for="userType">注册类型</label>
+          <select 
+            id="userType" 
+            v-model="registerForm.userType"
+          >
+            <option value="user">普通用户</option>
+            <option value="admin">管理员</option>
+          </select>
+        </div>
         
         <div class="form-group">
           <label for="username">用户名</label>
@@ -174,7 +194,7 @@ const handleDialogConfirm = () => {
         color: #2c3e50;
       }
       
-      input {
+      input, select {
         width: 100%;
         padding: 0.75rem;
         border: 1px solid #ddd;
@@ -184,7 +204,7 @@ const handleDialogConfirm = () => {
         
         &:focus {
           outline: none;
-          border-color: #42b983;
+          border-color: #409EFF; // Element蓝色主题
         }
       }
     }
@@ -192,7 +212,7 @@ const handleDialogConfirm = () => {
     .register-button {
       width: 100%;
       padding: 0.75rem;
-      background-color: #42b983;
+      background-color: #409EFF; // Element蓝色主题
       color: white;
       border: none;
       border-radius: 4px;
@@ -201,7 +221,7 @@ const handleDialogConfirm = () => {
       margin-top: 1rem;
       
       &:hover {
-        background-color: #359c6d;
+        background-color: #337ecc; // 深一点的蓝色
       }
     }
     
@@ -210,7 +230,7 @@ const handleDialogConfirm = () => {
       text-align: center;
       
       a {
-        color: #42b983;
+        color: #409EFF; // Element蓝色主题
         text-decoration: none;
         
         &:hover {
