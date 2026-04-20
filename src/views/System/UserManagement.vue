@@ -32,11 +32,23 @@
       style="width: 100%"
       border
     >
-      <el-table-column prop="id" label="用户ID" width="80" />
+      <el-table-column prop="id" label="用户 ID" width="80" />
       <el-table-column prop="username" label="用户名" width="150" />
-      <el-table-column prop="name" label="姓名" width="120" />
-      <el-table-column prop="phone" label="手机号" width="120" />
-      <el-table-column prop="email" label="邮箱" />
+      <el-table-column label="姓名" width="120">
+        <template #default="scope">
+          {{ scope.row.name || scope.row.username || '-' }}
+        </template>
+      </el-table-column>
+      <el-table-column prop="phone" label="手机号" width="120">
+        <template #default="scope">
+          {{ scope.row.phone || '-' }}
+        </template>
+      </el-table-column>
+      <el-table-column prop="email" label="邮箱">
+        <template #default="scope">
+          {{ scope.row.email || '-' }}
+        </template>
+      </el-table-column>
       <el-table-column prop="role" label="角色" width="120">
         <template #default="scope">
           <el-tag :type="getRoleTagType(scope.row.role)">
@@ -59,7 +71,7 @@
       </el-table-column>
       <el-table-column label="创建时间" width="180">
         <template #default="scope">
-          {{ formatDate(scope.row.createTime) }}
+          {{ formatDate(scope.row.createdAt) }}
         </template>
       </el-table-column>
       <el-table-column label="操作" width="200" fixed="right">
@@ -137,7 +149,7 @@
       v-model="deleteDialogVisible" 
       width="400px"
     >
-      <span>确定要删除用户 "{{ userToDelete?.name }}" 吗？</span>
+      <span>确定要删除用户 "{{ userToDelete?.name || userToDelete?.username }}" 吗？</span>
       <template #footer>
         <span class="dialog-footer">
           <el-button @click="deleteDialogVisible = false">取消</el-button>
@@ -151,7 +163,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import axios from 'axios'
+import { apiClient } from '@/services/authService'
 import type { FormInstance, FormRules } from 'element-plus'
 
 interface User {
@@ -161,8 +173,9 @@ interface User {
   phone: string
   email: string
   role: string
-  status: number // 1: 启用, 0: 禁用
-  createTime: string
+  status: number // 1: 启用，0: 禁用
+  createdAt: string | number[] // 支持数组格式的原始时间数据
+  password?: string // 可选密码字段，仅用于新增/编辑用户
 }
 
 // 用户数据
@@ -188,9 +201,9 @@ const currentUser = reactive<User>({
   name: '',
   phone: '',
   email: '',
-  role: 'user',
+  role: '',
   status: 1,
-  createTime: ''
+  createdAt: ''
 })
 
 // 用户角色选项
@@ -266,9 +279,25 @@ const getRoleTagType = (role: string): 'primary' | 'success' | 'warning' | 'dang
   return typeMap[role] || ''
 }
 
-// 格式化日期
-const formatDate = (dateString: string): string => {
-  const date = new Date(dateString)
+// 格式化日期 - 支持数组格式 [年，月，日，时，分，秒] 和字符串格式
+const formatDate = (dateValue: string | number[]): string => {
+  if (!dateValue) {
+    return '-'
+  }
+  
+  let date: Date
+  if (Array.isArray(dateValue)) {
+    // 后端返回 [年，月，日，时，分，秒] 数组格式，月份需减 1
+    const [year, month, day, hour, minute, second] = dateValue
+    date = new Date(year, month - 1, day, hour || 0, minute || 0, second || 0)
+  } else {
+    date = new Date(dateValue)
+  }
+  
+  if (isNaN(date.getTime())) {
+    return '-'
+  }
+  
   return date.toLocaleDateString() + ' ' + date.toLocaleTimeString()
 }
 
@@ -276,7 +305,7 @@ const formatDate = (dateString: string): string => {
 const loadUsers = async () => {
   loading.value = true
   try {
-    const response = await axios.get('/api/users', {
+    const response = await apiClient.get('/api/admin/manageusers', {
       params: {
         page: pagination.currentPage,
         size: pagination.pageSize,
@@ -284,11 +313,25 @@ const loadUsers = async () => {
       }
     })
     
-    users.value = response.data.items
-    pagination.total = response.data.total
+    console.log('原始响应数据:', response.data)
+    
+    // 根据响应结构，数据在 data.records 中
+    const responseData = response.data.data || response.data
+    const rawUsers = responseData.records || []
+    
+    // 直接使用后端返回的 role 字段，不再进行映射
+    users.value = rawUsers.map((user: any) => ({
+      ...user,
+      // 如果后端没有返回 role，则根据 identity 映射（兼容旧数据）
+      role: user.role || mapIdentityToRole(user.identity)
+    }))
+    pagination.total = responseData.total || 0
+    
+    console.log('解析后的用户数据:', users.value)
+    console.log('总数:', pagination.total)
     
     // 模拟数据（实际项目中删除此段）
-    if (!response.data.items) {
+    if (!responseData.records || responseData.records.length === 0) {
       users.value = [
         {
           id: 1,
@@ -298,7 +341,7 @@ const loadUsers = async () => {
           email: 'admin@example.com',
           role: 'admin',
           status: 1,
-          createTime: '2023-01-01T10:00:00'
+          createdAt: [2023, 1, 1, 10, 0, 0]
         },
         {
           id: 2,
@@ -308,7 +351,7 @@ const loadUsers = async () => {
           email: 'manager@example.com',
           role: 'manager',
           status: 1,
-          createTime: '2023-01-02T10:00:00'
+          createdAt: [2023, 1, 2, 10, 0, 0]
         },
         {
           id: 3,
@@ -318,7 +361,7 @@ const loadUsers = async () => {
           email: 'cashier@example.com',
           role: 'cashier',
           status: 1,
-          createTime: '2023-01-03T10:00:00'
+          createdAt: [2023, 1, 3, 10, 0, 0]
         }
       ]
       pagination.total = 3
@@ -329,6 +372,18 @@ const loadUsers = async () => {
   } finally {
     loading.value = false
   }
+}
+
+// 将 identity 映射为 role
+const mapIdentityToRole = (identity: number): string => {
+  const roleMap: Record<number, string> = {
+    0: 'user',      // 普通用户
+    1: 'admin',     // 管理员
+    2: 'manager',   // 经理
+    3: 'cashier',   // 收银员
+    4: 'pharmacist' // 药师
+  }
+  return roleMap[identity] || 'user'
 }
 
 // 搜索用户
@@ -367,7 +422,7 @@ const showAddUserDialog = () => {
     email: '',
     role: 'user',
     status: 1,
-    createTime: ''
+    createdAt: ''
   })
   userDialogVisible.value = true
 }
@@ -375,7 +430,13 @@ const showAddUserDialog = () => {
 // 显示编辑用户对话框
 const showEditUserDialog = (user: User) => {
   isEditMode.value = true
-  Object.assign(currentUser, { ...user })
+  Object.assign(currentUser, { 
+    ...user,
+    // 确保所有字段都有值
+    name: user.name || user.username, // 如果 name 为空，使用 username 作为默认值
+    phone: user.phone || '',
+    email: user.email || ''
+  })
   userDialogVisible.value = true
 }
 
@@ -386,21 +447,27 @@ const saveUser = async () => {
   await userFormRef.value.validate(async (valid) => {
     if (valid) {
       try {
+        let response
         if (isEditMode.value) {
           // 编辑用户
-          await axios.put(`/api/users/${currentUser.id}`, currentUser)
-          ElMessage.success('用户更新成功')
+          response = await apiClient.put(`/api/admin/manageusers/${currentUser.id}`, currentUser)
         } else {
           // 新增用户
-          await axios.post('/api/users', currentUser)
-          ElMessage.success('用户创建成功')
+          response = await apiClient.post('/api/admin/manageusers', currentUser)
         }
         
-        userDialogVisible.value = false
-        loadUsers()
-      } catch (error) {
-        ElMessage.error(isEditMode.value ? '更新用户失败' : '创建用户失败')
-        console.error(error)
+        // 检查响应码，必须 code === 1 才算成功
+        if (response.data.code === 1) {
+          ElMessage.success(isEditMode.value ? '用户更新成功' : '用户创建成功')
+          userDialogVisible.value = false
+          loadUsers()
+        } else {
+          // 后端返回错误信息
+          ElMessage.error(response.data.msg || (isEditMode.value ? '更新用户失败' : '创建用户失败'))
+        }
+      } catch (error: any) {
+        console.error('保存用户失败:', error)
+        ElMessage.error(error.response?.data?.msg || (isEditMode.value ? '更新用户失败' : '创建用户失败'))
       }
     }
   })
@@ -416,9 +483,9 @@ const handleDialogClose = () => {
 // 切换用户状态
 const toggleUserStatus = async (user: User) => {
   try {
-    await axios.patch(`/api/users/${user.id}/status`, {
-      status: user.status
-    })
+    // 注意：此时 user.status 已经是新值了（因为 v-model 双向绑定）
+    const endpoint = user.status === 1 ? 'enable' : 'disable'
+    await apiClient.put(`/api/admin/manageusers/${user.id}/${endpoint}`)
     ElMessage.success(`用户已${user.status === 1 ? '启用' : '禁用'}`)
   } catch (error) {
     // 回滚状态
@@ -439,7 +506,7 @@ const confirmDeleteUser = async () => {
   if (!userToDelete.value) return
   
   try {
-    await axios.delete(`/api/users/${userToDelete.value.id}`)
+    await apiClient.delete(`/api/admin/manageusers/${userToDelete.value.id}`)
     ElMessage.success('用户删除成功')
     deleteDialogVisible.value = false
     loadUsers()
@@ -452,21 +519,41 @@ const confirmDeleteUser = async () => {
 // 重置密码
 const resetPassword = async (user: User) => {
   try {
-    await ElMessageBox.prompt('请输入新密码', '重置密码', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
-      inputPattern: /^.{6,}$/,
-      inputErrorMessage: '密码长度至少6位'
-    }).then(async ({ value }) => {
-      await axios.patch(`/api/users/${user.id}/password`, {
-        password: value
-      })
-      ElMessage.success('密码重置成功')
-    })
-  } catch (error) {
-    if (error !== 'cancel') {
-      ElMessage.error('重置密码失败')
-      console.error(error)
+    const { value, action } = await ElMessageBox.prompt(
+      '请输入新密码（留空则使用默认密码：123456）',
+      '重置密码',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        inputPattern: /^.{0,}$|.{6,}$/,  // 允许空或至少6位
+        inputErrorMessage: '密码长度至少 6 位'
+      }
+    )
+    
+    // 如果用户点击了确定
+    if (action === 'confirm') {
+      // 准备请求体：如果输入为空，传空对象使用默认密码；否则传新密码
+      const requestBody = value && value.trim() 
+        ? { newPassword: value } 
+        : {}
+      
+      const response = await apiClient.put(
+        `/api/admin/manageusers/${user.id}/reset-password`,
+        requestBody
+      )
+      
+      // 检查响应码
+      if (response.data.code === 1) {
+        ElMessage.success('密码重置成功')
+      } else {
+        ElMessage.error(response.data.msg || '密码重置失败')
+      }
+    }
+  } catch (error: any) {
+    // 用户取消操作不显示错误
+    if (error !== 'cancel' && error !== 'close') {
+      console.error('重置密码失败:', error)
+      ElMessage.error(error.response?.data?.msg || '重置密码失败')
     }
   }
 }

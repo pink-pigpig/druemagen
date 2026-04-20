@@ -1,4 +1,5 @@
-/* eslint-disable */
+/// <reference types="vite/client" />
+
 declare module '*.vue' {
   import type { DefineComponent } from 'vue'
   const component: DefineComponent<{}, {}, any>
@@ -32,6 +33,17 @@ declare module '*.svg' {
 }
 
 declare module '*.webp' {
+  const value: string
+  export default value
+}
+
+// 其他资源文件类型声明
+declare module '*.ico' {
+  const value: string
+  export default value
+}
+
+declare module '*.bmp' {
   const value: string
   export default value
 }

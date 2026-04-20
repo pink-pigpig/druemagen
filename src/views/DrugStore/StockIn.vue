@@ -100,6 +100,8 @@
                 <el-option label="瓶" value="瓶" />
                 <el-option label="片" value="片" />
                 <el-option label="粒" value="粒" />
+                <el-option label="克g" value="克" />
+                <el-option label="千克Kg" value="千克" />
               </el-select>
             </el-form-item>
           </el-col>
@@ -362,7 +364,9 @@ const resetForm = () => {
 
 // 时间格式化函数
 const formatStockInTime = (stockInDate: string, createdAt: string) => {
-  // 优先使用createdAt字段
+  if (stockInDate) {
+    return stockInDate
+  }
   if (createdAt) {
     // 如果是数组格式 [年,月,日,时,分,秒]
     if (Array.isArray(createdAt)) {
@@ -371,10 +375,6 @@ const formatStockInTime = (stockInDate: string, createdAt: string) => {
     }
     // 如果是字符串格式
     return createdAt
-  }
-  // 备选使用stockInDate
-  if (stockInDate) {
-    return stockInDate
   }
   return '-'
 }

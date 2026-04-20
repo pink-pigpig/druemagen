@@ -241,12 +241,12 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
 import { authService } from '@/services/authService'
-import { userService } from '@/services/userService'
+import { adminService } from '@/services/adminService'
 import type { FormInstance, FormRules } from 'element-plus'
-import type { UserInfo } from '@/services/authService'
+import type { AdminInfo } from '@/services/authService'
 
 // 用户信息
-const userInfo = ref<UserInfo & { identity?: number }>({
+const userInfo = ref<AdminInfo & { identity?: number }>({
   id: 0,
   username: '',
   name: '',
@@ -276,14 +276,14 @@ const getAvatarUrl = (avatarPath: string): string => {
   if (avatarPath.startsWith('/avatar/')) {
     // 强制使用开发环境配置进行测试
     const fullUrl = `http://localhost:8080${avatarPath}`;
-    console.log('强制生成的完整URL:', fullUrl);
+    console.log('强制生成的完整 URL:', fullUrl);
     console.log('=== 头像处理结束 ===');
     return fullUrl;
   }
   
-  // 如果已经是完整URL，直接返回
+  // 如果已经是完整 URL，直接返回
   if (avatarPath.startsWith('http')) {
-    console.log('已经是完整URL，直接返回');
+    console.log('已经是完整 URL，直接返回');
     return avatarPath;
   }
   
@@ -296,7 +296,7 @@ const handleAvatarError = (event: Event) => {
   console.log('=== 头像加载失败 ===');
   console.log('错误事件:', event);
   const img = event.target as HTMLImageElement;
-  console.log('当前图片src:', img.src);
+  console.log('当前图片 src:', img.src);
   console.log('切换到默认头像:', defaultAvatar);
   img.src = defaultAvatar;
   ElMessage.warning('头像加载失败，显示默认头像');
@@ -338,7 +338,7 @@ const passwordRules = reactive<FormRules>({
   ],
   newPassword: [
     { required: true, message: '请输入新密码', trigger: 'blur' },
-    { min: 6, message: '密码长度至少6位', trigger: 'blur' }
+    { min: 6, message: '密码长度至少 6 位', trigger: 'blur' }
   ],
   confirmPassword: [
     { required: true, message: '请确认新密码', trigger: 'blur' },
@@ -362,20 +362,20 @@ const getRoleTagType = (roleName: string): 'primary' | 'success' | 'warning' | '
     manager: 'warning',
     cashier: 'success',
     pharmacist: 'primary',
-    user: 'info' // 普通用户使用info样式
+    user: 'info' // 普通用户使用 info 样式
   }
   console.log('获取角色标签类型:', roleName, '->', typeMap[roleName] || 'info');
-  return typeMap[roleName] || 'info'; // 默认返回info而不是空字符串
+  return typeMap[roleName] || 'info'; // 默认返回 info 而不是空字符串
 }
 
 // 时间格式化函数
 const formatTime = (dateValue: any): string => {
   if (!dateValue) return '-';
   
-  // 处理数组格式 [年,月,日,时,分,秒]
+  // 处理数组格式 [年，月，日，时，分，秒]
   if (Array.isArray(dateValue) && dateValue.length >= 3) {
     const year = dateValue[0];
-    const month = String(dateValue[1]).padStart(2, '0'); // 月份不需要减1
+    const month = String(dateValue[1]).padStart(2, '0'); // 月份不需要减 1
     const day = String(dateValue[2]).padStart(2, '0');
     const hour = dateValue.length > 3 ? String(dateValue[3]).padStart(2, '0') : '00';
     const minute = dateValue.length > 4 ? String(dateValue[4]).padStart(2, '0') : '00';
@@ -389,7 +389,7 @@ const formatTime = (dateValue: any): string => {
     return dateValue;
   }
   
-  // 处理Date对象
+  // 处理 Date 对象
   if (dateValue instanceof Date) {
     return dateValue.toLocaleString();
   }
@@ -397,44 +397,33 @@ const formatTime = (dateValue: any): string => {
   return '-';
 }
 
-// 保留旧的formatDate函数用于兼容性，内部调用formatTime
+// 保留旧的 formatDate 函数用于兼容性，内部调用 formatTime
 const formatDate = (dateValue: any): string => {
   return formatTime(dateValue);
 }
 
-
-// 后端 API 接口应该在服务器端实现，而不是在 Vue 组件中
-// 这里仅作注释说明需要实现的接口
-
-// 1. 获取用户信息接口: GET /api/profile
-// SQL: SELECT id, username, name, phone, email, created_at, updated_at, isadmin, status FROM drugmanage.admin WHERE id = ?
-
-// 2. 更新手机号接口: PUT /api/profile/phone
-// SQL: UPDATE drugmanage.admin SET phone = ? WHERE id = ?
-
-// 3. 更新邮箱接口: PUT /api/profile/email
-// SQL: UPDATE drugmanage.admin SET email = ? WHERE id = ?
-
-// 4. 修改密码接口: PUT /api/profile/password
-// SQL: UPDATE drugmanage.admin SET password = ? WHERE id = ? AND password = ? (需要验证原密码)
-// 加载用户信息
+/**
+ * 加载用户信息
+ * 使用 userService.getCurrentUserProfile() 获取当前用户信息
+ */
 const loadUserInfo = async () => {
   try {
     console.log('=== 开始加载用户信息 ===');
     
-    // 使用真实的API调用
-    const response = await userService.getCurrentUserProfile();
-    console.log('原始API响应:', response);
-    console.log('用户头像字段:', response.avatar);
-    console.log('用户identity字段:', response.identity);
-    console.log('用户createTime字段:', response.createTime); // 访问正确的字段
+    // 调用用户服务获取当前用户信息
+    const response = await adminService.getCurrentAdminProfile();
+    console.log('原始 API 响应:', response);
+    console.log('admin头像字段:', response.avatar);
+    console.log('admin identity 字段:', response.identity);
+    console.log('admin createTime 字段:', response.createTime);
     console.log('=== 调试信息 ===');
-    console.log('response对象所有属性:', Object.keys(response));
-    console.log('response.createTime是否存在:', 'createTime' in response);
-    console.log('response.createTime值:', response.createTime);
-    console.log('response.lastLoginTime是否存在:', 'lastLoginTime' in response);
-    console.log('response.lastLoginTime值:', response.lastLoginTime);
-    // 根据identity字段动态生成角色信息
+    console.log('response 对象所有属性:', Object.keys(response));
+    console.log('response.createTime 是否存在:', 'createTime' in response);
+    console.log('response.createTime 值:', response.createTime);
+    console.log('response.lastLoginTime 是否存在:', 'lastLoginTime' in response);
+    console.log('response.lastLoginTime 值:', response.lastLoginTime);
+    
+    // 根据 identity 字段动态生成角色信息
     let roles = [];
     if (response.identity === 1) {
       roles = [{
@@ -462,7 +451,10 @@ const loadUserInfo = async () => {
       createTime: response.createTime, // 使用映射后的字段
       lastLoginTime: response.lastLoginTime, // 使用映射后的字段
       identity: response.identity
-    } as UserInfo;
+    } as AdminInfo;
+    
+    console.log('=== 用户信息加载完成 ===');
+    console.log('最终 userInfo:', userInfo.value);
   } catch (error: any) {
     console.error('=== 加载用户信息失败 ===');
     console.error('错误对象:', error);
@@ -476,11 +468,11 @@ const loadUserInfo = async () => {
     
     // 根据不同错误类型显示不同消息
     if (error.response?.status === 404) {
-      ElMessage.error('API接口未找到，请检查后端服务是否启动在正确端口');
+      ElMessage.error('API 接口未找到，请检查后端服务是否启动在正确端口');
     } else if (error.response?.status === 401) {
       ElMessage.error('未授权访问，请重新登录');
     } else {
-      ElMessage.error(`加载用户信息失败: ${error.message}`);
+      ElMessage.error(`加载用户信息失败：${error.message}`);
     }
   }
 }
@@ -496,7 +488,10 @@ const cancelEdit = (field: 'phone' | 'email') => {
   isEditing[field] = false
 }
 
-// 保存手机号
+/**
+ * 保存手机号
+ * 调用 adminService.updatePhone() 更新管理员手机号
+ */
 const savePhone = async () => {
   if (!/^1[3-9]\d{9}$/.test(editForm.phone)) {
     ElMessage.error('请输入正确的手机号')
@@ -504,7 +499,7 @@ const savePhone = async () => {
   }
   
   try {
-    await userService.updatePhone(editForm.phone)
+    await adminService.updatePhone(editForm.phone)
     
     userInfo.value.phone = editForm.phone
     isEditing.phone = false
@@ -515,7 +510,10 @@ const savePhone = async () => {
   }
 }
 
-// 保存邮箱
+/**
+ * 保存邮箱
+ * 调用 adminService.updateEmail() 更新管理员邮箱
+ */
 const saveEmail = async () => {
   if (!/^\w+([.-]?\w+)*@\w+([.-]?\w+)*(\.\w{2,3})+$/.test(editForm.email)) {
     ElMessage.error('请输入正确的邮箱地址')
@@ -523,7 +521,7 @@ const saveEmail = async () => {
   }
   
   try {
-    await userService.updateEmail(editForm.email)
+    await adminService.updateEmail(editForm.email)
     
     userInfo.value.email = editForm.email
     isEditing.email = false
@@ -534,7 +532,10 @@ const saveEmail = async () => {
   }
 }
 
-// 更换头像
+/**
+ * 更换头像
+ * 调用 adminService.uploadAvatar() 上传管理员头像
+ */
 const changeAvatar = async () => {
   // 创建文件选择输入框
   const input = document.createElement('input')
@@ -544,7 +545,7 @@ const changeAvatar = async () => {
     const file = (event.target as HTMLInputElement).files?.[0]
     if (file) {
       try {
-        const response = await userService.uploadAvatar(file)
+        const response = await adminService.uploadAvatar(file)
         userInfo.value.avatar = response.avatarUrl
         ElMessage.success('头像更新成功')
       } catch (error) {
@@ -566,14 +567,17 @@ const showPasswordDialog = () => {
   passwordDialogVisible.value = true
 }
 
-// 修改密码
+/**
+ * 修改密码
+ * 调用 adminService.changePassword() 修改管理员密码
+ */
 const changePassword = async () => {
   if (!passwordFormRef.value) return
   
   await passwordFormRef.value.validate(async (valid) => {
     if (valid) {
       try {
-        await userService.changePassword({
+        await adminService.changePassword({
           oldPassword: passwordForm.oldPassword,
           newPassword: passwordForm.newPassword,
           confirmNewPassword: passwordForm.confirmPassword
@@ -585,7 +589,7 @@ const changePassword = async () => {
         
         // 登出用户，要求重新登录
         setTimeout(async () => {
-          await userService.logout()
+          await adminService.logout()
           await authService.logout() // 确保本地状态也被清除
           window.location.href = '/login'
         }, 1500)
@@ -604,11 +608,14 @@ const handlePasswordDialogClose = () => {
   }
 }
 
-// 查看登录历史
+/**
+ * 查看登录历史
+ * 调用 adminService.getLoginHistory() 获取管理员登录历史
+ */
 const viewLoginHistory = async () => {
   try {
     console.log('开始获取登录历史...');
-    const response = await userService.getLoginHistory();
+    const response = await adminService.getLoginHistory();
     console.log('登录历史原始响应:', response);
     
     // 处理后端返回的包装格式 {code: 1, msg: null, data: [...]}
@@ -625,8 +632,8 @@ const viewLoginHistory = async () => {
     // 映射后端数据到前端接口格式
     loginHistory.value = historyData.map((item: any) => ({
       id: item.id,
-      loginTime: item.loginTime, // 保持原始时间数组格式，由formatDate处理
-      ipAddress: item.ip || item.ipAddress || '未知IP',
+      loginTime: item.loginTime, // 保持原始时间数组格式，由 formatDate 处理
+      ipAddress: item.ip || item.ipAddress || '未知 IP',
       userAgent: item.deviceInfo || item.userAgent || '未知设备',
       status: item.status === '成功' ? 1 : 0 // 后端返回字符串"成功"/"失败"
     }));

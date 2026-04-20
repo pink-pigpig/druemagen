@@ -1,4 +1,4 @@
-<!-- src/views/Statistics/SalesStats.vue -->
+63<!-- src/views/Statistics/SalesStats.vue -->
 <template>
   <div class="sales-stats">
     <h2>销售统计</h2>
@@ -109,7 +109,19 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
 import * as echarts from 'echarts'
-import axios from 'axios'
+import { ElMessage } from 'element-plus'
+import { 
+  getSalesOverview, 
+  getSalesTrend, 
+  getProductSalesRank, 
+  getCategoryProportion, 
+  getTimeDistribution,
+  type SalesOverviewData,
+  type SalesTrendPoint,
+  type ProductSalesRank,
+  type CategoryProportion,
+  type TimeDistribution
+} from '@/services/statisticsService'
 
 // 图表实例
 const salesTrendChart = ref<HTMLDivElement | null>(null)
@@ -123,6 +135,9 @@ let productRankChartInstance: echarts.ECharts | null = null
 let salesProportionChartInstance: echarts.ECharts | null = null
 let timeAnalysisChartInstance: echarts.ECharts | null = null
 
+// 加载状态
+const loading = ref(false)
+
 // 查询过滤条件
 const filter = reactive({
   startDate: '',
@@ -131,15 +146,15 @@ const filter = reactive({
 })
 
 // 统计概览数据
-const overview = reactive({
-  totalSales: 128506.80,
-  salesGrowth: 12.5,
-  totalOrders: 1280,
-  ordersGrowth: 8.3,
-  totalItems: 3260,
-  itemsGrowth: 15.7,
-  avgOrderValue: 100.40,
-  avgOrderGrowth: 3.9
+const overview = reactive<SalesOverviewData>({
+  totalSales: 0,
+  salesGrowth: 0,
+  totalOrders: 0,
+  ordersGrowth: 0,
+  totalItems: 0,
+  itemsGrowth: 0,
+  avgOrderValue: 0,
+  avgOrderGrowth: 0
 })
 
 // 初始化日期范围
@@ -172,33 +187,62 @@ const resetFilter = () => {
 // 加载统计数据
 const loadStatistics = async () => {
   try {
-    // 这里应该是实际的API调用
-    // const response = await axios.get('/api/statistics/sales', {
-    //   params: {
-    //     startDate: filter.startDate,
-    //     endDate: filter.endDate,
-    //     statType: filter.statType
-    //   }
-    // })
+    loading.value = true
     
-    // 使用模拟数据渲染图表
-    renderSalesTrendChart()
-    renderProductRankChart()
-    renderSalesProportionChart()
-    renderTimeAnalysisChart()
+    // 并行请求所有接口
+    const [overviewRes, trendRes, rankRes, proportionRes, timeRes] = await Promise.all([
+      getSalesOverview({
+        startDate: filter.startDate,
+        endDate: filter.endDate
+      }),
+      getSalesTrend({
+        startDate: filter.startDate,
+        endDate: filter.endDate,
+        statType: filter.statType as 'daily' | 'monthly' | 'yearly'
+      }),
+      getProductSalesRank({
+        startDate: filter.startDate,
+        endDate: filter.endDate,
+        limit: 8
+      }),
+      getCategoryProportion({
+        startDate: filter.startDate,
+        endDate: filter.endDate
+      }),
+      getTimeDistribution({
+        startDate: filter.startDate,
+        endDate: filter.endDate
+      })
+    ])
     
-  } catch (error) {
+    // 更新概览数据
+    Object.assign(overview, overviewRes)
+    
+    // 渲染图表
+    renderSalesTrendChart(trendRes)
+    renderProductRankChart(rankRes)
+    renderSalesProportionChart(proportionRes)
+    renderTimeAnalysisChart(timeRes)
+    
+    ElMessage.success('数据加载成功')
+  } catch (error: any) {
     console.error('加载统计数据失败:', error)
+    ElMessage.error(error.message || '加载数据失败')
+  } finally {
+    loading.value = false
   }
 }
 
 // 渲染销售趋势图
-const renderSalesTrendChart = () => {
-  if (!salesTrendChart.value) return
+const renderSalesTrendChart = (trendData: SalesTrendPoint[]) => {
+  if (!salesTrendChart.value || trendData.length === 0) return
   
   if (!salesTrendChartInstance) {
     salesTrendChartInstance = echarts.init(salesTrendChart.value)
   }
+  
+  const dates = trendData.map(item => item.date)
+  const sales = trendData.map(item => item.sales)
   
   const option = {
     tooltip: {
@@ -211,7 +255,8 @@ const renderSalesTrendChart = () => {
     },
     xAxis: {
       type: 'category',
-      data: ['1月', '2月', '3月', '4月', '5月', '6月', '7月', '8月', '9月', '10月', '11月', '12月']
+      data: dates,
+      boundaryGap: false
     },
     yAxis: {
       type: 'value',
@@ -220,7 +265,8 @@ const renderSalesTrendChart = () => {
       }
     },
     series: [{
-      data: [12000, 18000, 15000, 22000, 28000, 32000, 35000, 38000, 36000, 42000, 45000, 52000],
+      name: '销售额',
+      data: sales,
       type: 'line',
       smooth: true,
       areaStyle: {
@@ -236,18 +282,40 @@ const renderSalesTrendChart = () => {
 }
 
 // 渲染商品销量排行图
-const renderProductRankChart = () => {
-  if (!productRankChart.value) return
+const renderProductRankChart = (rankData: ProductSalesRank[]) => {
+  if (!productRankChart.value || rankData.length === 0) return
   
   if (!productRankChartInstance) {
     productRankChartInstance = echarts.init(productRankChart.value)
   }
+  
+  // 药品分类映射
+  const categoryMap: Record<string, string> = {
+    '1': '处方药',
+    '2': '非处方药',
+    '3': '中药饮片',
+    '4': '保健品',
+    '5': '医疗器械'
+  }
+  
+  const names = rankData.map(item => item.drugName)
+  const sales = rankData.map(item => item.totalSales)
   
   const option = {
     tooltip: {
       trigger: 'axis',
       axisPointer: {
         type: 'shadow'
+      },
+      formatter: (params: any) => {
+        const item = rankData[params[0].dataIndex]
+        return `
+          <div style="font-weight:bold">${item.drugName}</div>
+          <div>排名: 第${item.rank}名</div>
+          <div>分类: ${categoryMap[item.category] || item.category}</div>
+          <div>销量: ${formatNumber(item.totalSales)}件</div>
+          <div>销售额: ¥${formatNumber(item.totalAmount)}</div>
+        `
       }
     },
     grid: {
@@ -262,14 +330,23 @@ const renderProductRankChart = () => {
     },
     yAxis: {
       type: 'category',
-      data: ['阿莫西林胶囊', '布洛芬片', '维生素C片', '板蓝根颗粒', '感冒灵颗粒', '头孢拉定胶囊', '奥美拉唑肠溶片', '复方甘草片']
+      data: names,
+      inverse: true  // 反转,让第一名在顶部
     },
     series: [
       {
         type: 'bar',
-        data: [1200, 1050, 980, 870, 760, 650, 540, 430],
+        data: sales,
         itemStyle: {
-          color: '#52c41a'
+          color: (params: any) => {
+            const colors = ['#ff4d4f', '#fa8c16', '#faad14', '#52c41a', '#1890ff']
+            return colors[params.dataIndex % colors.length]
+          }
+        },
+        label: {
+          show: true,
+          position: 'right',
+          formatter: '{c}'
         }
       }
     ]
@@ -279,17 +356,33 @@ const renderProductRankChart = () => {
 }
 
 // 渲染销售额占比图
-const renderSalesProportionChart = () => {
-  if (!salesProportionChart.value) return
+const renderSalesProportionChart = (proportionData: CategoryProportion[]) => {
+  if (!salesProportionChart.value || proportionData.length === 0) return
   
   if (!salesProportionChartInstance) {
     salesProportionChartInstance = echarts.init(salesProportionChart.value)
   }
   
+  // 药品分类映射
+  const categoryMap: Record<string, string> = {
+    '1': '处方药',
+    '2': '非处方药',
+    '3': '中药饮片',
+    '4': '保健品',
+    '5': '医疗器械'
+  }
+  
+  const chartData = proportionData.map(item => ({
+    name: categoryMap[item.category] || item.category,
+    value: item.amount
+  }))
+  
   const option = {
     tooltip: {
       trigger: 'item',
-      formatter: '{a} <br/>{b}: {c} ({d}%)'
+      formatter: (params: any) => {
+        return `${params.seriesName}<br/>${params.name}: ¥${formatNumber(params.value)} (${params.percent}%)`
+      }
     },
     legend: {
       orient: 'vertical',
@@ -300,13 +393,7 @@ const renderSalesProportionChart = () => {
         name: '销售额占比',
         type: 'pie',
         radius: '50%',
-        data: [
-          { value: 45, name: '处方药' },
-          { value: 30, name: '非处方药' },
-          { value: 15, name: '保健品' },
-          { value: 7, name: '医疗器械' },
-          { value: 3, name: '其他' }
-        ],
+        data: chartData,
         emphasis: {
           itemStyle: {
             shadowBlur: 10,
@@ -322,17 +409,24 @@ const renderSalesProportionChart = () => {
 }
 
 // 渲染时段销售分析图
-const renderTimeAnalysisChart = () => {
-  if (!timeAnalysisChart.value) return
+const renderTimeAnalysisChart = (timeData: TimeDistribution[]) => {
+  if (!timeAnalysisChart.value || timeData.length === 0) return
   
   if (!timeAnalysisChartInstance) {
     timeAnalysisChartInstance = echarts.init(timeAnalysisChart.value)
   }
   
+  const chartData = timeData.map(item => ({
+    name: item.timeRange,
+    value: item.amount
+  }))
+  
   const option = {
     tooltip: {
       trigger: 'item',
-      formatter: '{a} <br/>{b}: {c} ({d}%)'
+      formatter: (params: any) => {
+        return `${params.seriesName}<br/>${params.name}: ¥${formatNumber(params.value)} (${params.percent}%)`
+      }
     },
     legend: {
       bottom: 'bottom'
@@ -357,19 +451,15 @@ const renderTimeAnalysisChart = () => {
             show: true,
             fontSize: '18',
             fontWeight: 'bold',
-            formatter: '{b}\n{d}%'
+            formatter: (params: any) => {
+              return `${params.name}\n¥${formatNumber(params.value)}\n${params.percent}%`
+            }
           }
         },
         labelLine: {
           show: false
         },
-        data: [
-          { value: 32, name: '08:00-12:00' },
-          { value: 28, name: '12:00-14:00' },
-          { value: 20, name: '14:00-18:00' },
-          { value: 12, name: '18:00-22:00' },
-          { value: 8, name: '其他时段' }
-        ]
+        data: chartData
       }
     ]
   }

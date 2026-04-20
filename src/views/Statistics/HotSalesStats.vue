@@ -49,24 +49,24 @@
     <!-- 统计概览 -->
     <div class="stats-overview">
       <div class="stat-card">
-        <div class="stat-title">热销商品数</div>
-        <div class="stat-value">{{ overview.hotProducts }}</div>
-        <div class="stat-desc">本月新增5款</div>
+        <div class="stat-title">药品种类数</div>
+        <div class="stat-value">{{ overview.totalDrugVariety }}</div>
+        <div class="stat-desc">热销商品总数</div>
       </div>
       <div class="stat-card">
-        <div class="stat-title">总销量</div>
-        <div class="stat-value">{{ formatNumber(overview.totalSales) }}</div>
-        <div class="stat-desc">环比增长12%</div>
+        <div class="stat-title">订单总数</div>
+        <div class="stat-value">{{ formatNumber(overview.totalOrderCount) }}</div>
+        <div class="stat-desc">统计周期内订单数</div>
       </div>
       <div class="stat-card">
-        <div class="stat-title">总销售额</div>
-        <div class="stat-value">¥{{ formatNumber(overview.totalAmount) }}</div>
-        <div class="stat-desc">环比增长8%</div>
+        <div class="stat-title">销售总额</div>
+        <div class="stat-value">¥{{ formatNumber(overview.totalSalesAmount) }}</div>
+        <div class="stat-desc">统计周期内总销售额</div>
       </div>
       <div class="stat-card">
-        <div class="stat-title">平均单价</div>
-        <div class="stat-value">¥{{ overview.avgPrice.toFixed(2) }}</div>
-        <div class="stat-desc">同比上升3%</div>
+        <div class="stat-title">平均订单金额</div>
+        <div class="stat-value">¥{{ overview.avgOrderAmount.toFixed(2) }}</div>
+        <div class="stat-desc">每单平均消费金额</div>
       </div>
     </div>
 
@@ -105,17 +105,17 @@
               </tr>
             </thead>
             <tbody>
-              <tr v-for="(item, index) in topSalesData" :key="item.id">
+              <tr v-for="item in topSalesData" :key="item.drugCode">
                 <td>
-                  <span :class="getRankClass(index + 1)">
-                    {{ index + 1 }}
+                  <span :class="getRankClass(item.rank)">
+                    {{ item.rank }}
                   </span>
                 </td>
-                <td>{{ item.name }}</td>
+                <td>{{ item.drugName }}</td>
                 <td>{{ getCategoryName(item.category) }}</td>
-                <td>{{ item.sales }}</td>
-                <td>¥{{ formatNumber(item.amount) }}</td>
-                <td>¥{{ item.price.toFixed(2) }}</td>
+                <td>{{ formatNumber(item.totalSales) }}</td>
+                <td>¥{{ formatNumber(item.totalAmount) }}</td>
+                <td>¥{{ item.avgPrice.toFixed(2) }}</td>
               </tr>
             </tbody>
           </table>
@@ -139,10 +139,10 @@
               <option value="">请选择商品</option>
               <option 
                 v-for="product in topSalesData.slice(0, 10)" 
-                :key="product.id" 
-                :value="product.id"
+                :key="product.drugCode" 
+                :value="product.drugCode"
               >
-                {{ product.name }}
+                {{ product.drugName }} (排名第{{ product.rank }})
               </option>
             </select>
           </div>
@@ -164,7 +164,8 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
 import * as echarts from 'echarts'
-import axios from 'axios'
+import { ElMessage } from 'element-plus'
+import { getHotSalesStats, getOverview, getProductTrend, type HotSalesItem, type OverviewData } from '@/services/statisticsService'
 
 // 图表实例
 const topSalesChart = ref<HTMLDivElement | null>(null)
@@ -177,6 +178,9 @@ let topSalesChartInstance: echarts.ECharts | null = null
 let categoryChartInstance: echarts.ECharts | null = null
 let trendChartInstance: echarts.ECharts | null = null
 let heatmapChartInstance: echarts.ECharts | null = null
+
+// 加载状态
+const loading = ref(false)
 
 // 查询过滤条件
 const filter = reactive({
@@ -195,15 +199,16 @@ const chartView = reactive({
 const selectedProduct = ref('')
 
 // 统计概览数据
-const overview = reactive({
-  hotProducts: 128,
-  totalSales: 56800,
-  totalAmount: 1256800,
-  avgPrice: 22.15
+const overview = reactive<OverviewData>({
+  totalSalesAmount: 0,
+  totalOrderCount: 0,
+  totalProductQuantity: 0,
+  totalDrugVariety: 0,
+  avgOrderAmount: 0
 })
 
 // 热销数据
-const topSalesData = ref<any[]>([])
+const topSalesData = ref<HotSalesItem[]>([])
 
 // 初始化日期范围
 const initDateRange = () => {
@@ -220,7 +225,7 @@ const formatDate = (date: Date): string => {
   return date.toISOString().split('T')[0]
 }
 
-// 格式化数字（添加千位分隔符）
+// 格式化数字(添加千位分隔符)
 const formatNumber = (num: number): string => {
   return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
 }
@@ -233,15 +238,19 @@ const getRankClass = (rank: number): string => {
   return 'rank-normal'
 }
 
-// 获取分类名称
-const getCategoryName = (category: string): string => {
-  const categories: Record<string, string> = {
-    prescription: '处方药',
-    otc: '非处方药',
-    health: '保健品',
-    medical: '医疗器械'
+// 获取分类名称(将数字转换为中文)
+const getCategoryName = (category: string | undefined): string => {
+  if (!category) return '-'
+  
+  const categoryMap: Record<string, string> = {
+    '1': '处方药',
+    '2': '非处方药',
+    '3': '中药饮片',
+    '4': '保健品',
+    '5': '医疗器械'
   }
-  return categories[category] || category
+  
+  return categoryMap[category] || category
 }
 
 // 重置筛选条件
@@ -255,110 +264,53 @@ const resetFilter = () => {
 // 切换热销排行榜视图
 const switchTopSalesView = (view: string) => {
   chartView.topSales = view
+  // 延迟渲染,等待 DOM 更新
+  setTimeout(() => {
+    if (view === 'bar') {
+      renderTopSalesChart()
+    }
+  }, 100)
 }
 
 // 加载热销数据
 const loadHotSalesData = async () => {
   try {
-    // 这里应该是实际的API调用
-    // const response = await axios.get('/api/statistics/hot-sales', {
-    //   params: {
-    //     startDate: filter.startDate,
-    //     endDate: filter.endDate,
-    //     category: filter.category,
-    //     rankType: filter.rankType
-    //   }
-    // })
+    loading.value = true
     
-    // 使用模拟数据
-    topSalesData.value = [
-      {
-        id: '1',
-        name: '阿莫西林胶囊',
-        category: 'prescription',
-        sales: 1250,
-        amount: 32500,
-        price: 26.00
-      },
-      {
-        id: '2',
-        name: '布洛芬片',
-        category: 'otc',
-        sales: 980,
-        amount: 18200,
-        price: 18.50
-      },
-      {
-        id: '3',
-        name: '维生素C片',
-        category: 'health',
-        sales: 870,
-        amount: 27840,
-        price: 32.00
-      },
-      {
-        id: '4',
-        name: '板蓝根颗粒',
-        category: 'otc',
-        sales: 760,
-        amount: 17100,
-        price: 22.50
-      },
-      {
-        id: '5',
-        name: '感冒灵颗粒',
-        category: 'otc',
-        sales: 650,
-        amount: 18590,
-        price: 28.60
-      },
-      {
-        id: '6',
-        name: '头孢拉定胶囊',
-        category: 'prescription',
-        sales: 540,
-        amount: 21600,
-        price: 40.00
-      },
-      {
-        id: '7',
-        name: '奥美拉唑肠溶片',
-        category: 'prescription',
-        sales: 430,
-        amount: 23650,
-        price: 55.00
-      },
-      {
-        id: '8',
-        name: '复方甘草片',
-        category: 'otc',
-        sales: 380,
-        amount: 11400,
-        price: 30.00
-      },
-      {
-        id: '9',
-        name: '硝酸甘油片',
-        category: 'prescription',
-        sales: 320,
-        amount: 16000,
-        price: 50.00
-      },
-      {
-        id: '10',
-        name: '藿香正气水',
-        category: 'otc',
-        sales: 290,
-        amount: 8700,
-        price: 30.00
-      }
-    ]
+    // 并行请求两个接口
+    const [hotSalesRes, overviewRes] = await Promise.all([
+      getHotSalesStats({
+        startDate: filter.startDate,
+        endDate: filter.endDate,
+        category: filter.category || undefined,
+        rankType: filter.rankType as 'sales' | 'amount' | 'orderCount'
+      }),
+      getOverview({
+        startDate: filter.startDate,
+        endDate: filter.endDate
+      })
+    ])
     
+    // 更新热销数据
+    topSalesData.value = hotSalesRes
+    
+    // 更新概览数据
+    overview.totalSalesAmount = overviewRes.totalSalesAmount
+    overview.totalOrderCount = overviewRes.totalOrderCount
+    overview.totalProductQuantity = overviewRes.totalProductQuantity
+    overview.totalDrugVariety = overviewRes.totalDrugVariety
+    overview.avgOrderAmount = overviewRes.avgOrderAmount
+    
+    // 渲染图表
     renderTopSalesChart()
     renderCategoryChart()
     
-  } catch (error) {
+    ElMessage.success('数据加载成功')
+  } catch (error: any) {
     console.error('加载热销数据失败:', error)
+    ElMessage.error(error.message || '加载数据失败')
+  } finally {
+    loading.value = false
   }
 }
 
@@ -370,16 +322,27 @@ const loadProductTrend = () => {
 
 // 渲染热销排行榜
 const renderTopSalesChart = () => {
-  if (!topSalesChart.value) return
+  if (!topSalesChart.value || topSalesData.value.length === 0) return
   
   if (!topSalesChartInstance) {
     topSalesChartInstance = echarts.init(topSalesChart.value)
   }
   
-  const names = topSalesData.value.map(item => item.name)
-  const values = topSalesData.value.map(item => 
-    filter.rankType === 'sales' ? item.sales : item.amount
-  )
+  // 根据排序方式决定显示的数据
+  const names = topSalesData.value.map(item => item.drugName)
+  let values: number[]
+  let seriesName: string
+  
+  if (filter.rankType === 'sales') {
+    values = topSalesData.value.map(item => item.totalSales)
+    seriesName = '销量'
+  } else if (filter.rankType === 'amount') {
+    values = topSalesData.value.map(item => item.totalAmount)
+    seriesName = '销售额'
+  } else {
+    values = topSalesData.value.map(item => item.orderCount)
+    seriesName = '订单数'
+  }
   
   const option = {
     tooltip: {
@@ -388,9 +351,17 @@ const renderTopSalesChart = () => {
         type: 'shadow'
       },
       formatter: (params: any) => {
-        const item = topSalesData.value[params[0]. dataIndex]
-        const unit = filter.rankType === 'sales' ? '件' : '元'
-        return `${item.name}<br/>${params[0].seriesName}: ${params[0].value}${unit}`
+        const item = topSalesData.value[params[0].dataIndex]
+        let unit = '件'
+        if (filter.rankType === 'amount') unit = '元'
+        if (filter.rankType === 'orderCount') unit = '单'
+        
+        return `
+          <div style="font-weight:bold">${item.drugName}</div>
+          <div>排名: 第${item.rank}名</div>
+          <div>${seriesName}: ${params[0].value}${unit}</div>
+          <div>平均单价: ¥${item.avgPrice.toFixed(2)}</div>
+        `
       }
     },
     grid: {
@@ -405,19 +376,19 @@ const renderTopSalesChart = () => {
     },
     yAxis: {
       type: 'category',
-      data: names
+      data: names,
+      inverse: true  // 反转,让第一名在顶部
     },
     series: [
       {
-        name: filter.rankType === 'sales' ? '销量' : '销售额',
+        name: seriesName,
         type: 'bar',
         data: values,
         itemStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
-            { offset: 0, color: '#83bff6' },
-            { offset: 0.5, color: '#188df0' },
-            { offset: 1, color: '#1890ff' }
-          ])
+          color: (params: any) => {
+            const colors = ['#ff4d4f', '#fa8c16', '#faad14', '#52c41a', '#1890ff']
+            return colors[params.dataIndex % colors.length]
+          }
         },
         label: {
           show: true,
@@ -433,23 +404,40 @@ const renderTopSalesChart = () => {
 
 // 渲染分类销售占比图
 const renderCategoryChart = () => {
-  if (!categoryChart.value) return
+  if (!categoryChart.value || topSalesData.value.length === 0) return
   
   if (!categoryChartInstance) {
     categoryChartInstance = echarts.init(categoryChart.value)
   }
   
-  const categoryData = [
-    { value: 45, name: '处方药' },
-    { value: 32, name: '非处方药' },
-    { value: 15, name: '保健品' },
-    { value: 8, name: '医疗器械' }
-  ]
+  // 药品分类映射
+  const categoryMap: Record<string, string> = {
+    '1': '处方药',
+    '2': '非处方药',
+    '3': '中药饮片',
+    '4': '保健品',
+    '5': '医疗器械'
+  }
+  
+  // 按分类统计销售额
+  const categoryAmountMap: Record<string, number> = {}
+  topSalesData.value.forEach(item => {
+    const categoryKey = item.category || '其他'
+    categoryAmountMap[categoryKey] = (categoryAmountMap[categoryKey] || 0) + item.totalAmount
+  })
+  
+  // 转换为饼图数据格式,并将数字分类转换为中文
+  const categoryData = Object.entries(categoryAmountMap).map(([key, value]) => ({
+    name: categoryMap[key] || key,  // 将数字转换为中文名称
+    value
+  }))
   
   const option = {
     tooltip: {
       trigger: 'item',
-      formatter: '{a} <br/>{b}: {c} ({d}%)'
+      formatter: (params: any) => {
+        return `${params.seriesName}<br/>${params.name}: ¥${params.value.toFixed(2)} (${params.percent}%)`
+      }
     },
     legend: {
       orient: 'horizontal',
@@ -475,7 +463,9 @@ const renderCategoryChart = () => {
             show: true,
             fontSize: '14',
             fontWeight: 'bold',
-            formatter: '{b}\n{d}%'
+            formatter: (params: any) => {
+              return `${params.name}\n¥${params.value.toFixed(2)}\n${params.percent}%`
+            }
           }
         },
         labelLine: {
@@ -490,41 +480,68 @@ const renderCategoryChart = () => {
 }
 
 // 渲染趋势图
-const renderTrendChart = () => {
-  if (!trendChart.value) return
+const renderTrendChart = async () => {
+  if (!trendChart.value || !selectedProduct.value) return
   
   if (!trendChartInstance) {
     trendChartInstance = echarts.init(trendChart.value)
   }
   
-  const months = ['1月', '2月', '3月', '4月', '5月', '6月']
-  const salesData = [120, 132, 101, 134, 90, 230]
-  
-  const option = {
-    tooltip: {
-      trigger: 'axis'
-    },
-    xAxis: {
-      type: 'category',
-      data: months
-    },
-    yAxis: {
-      type: 'value'
-    },
-    series: [{
-      data: salesData,
-      type: 'line',
-      smooth: true,
-      itemStyle: {
-        color: '#1890ff'
+  try {
+    // 调用后端接口获取真实趋势数据
+    const trendData = await getProductTrend({
+      drugCode: selectedProduct.value,
+      startDate: filter.startDate,
+      endDate: filter.endDate
+    })
+    
+    if (trendData.length === 0) {
+      ElMessage.warning('该商品在选定时间段内无销售记录')
+      return
+    }
+    
+    // 格式化日期为 "月/日" 格式
+    const dates = trendData.map(item => {
+      const date = new Date(item.date)
+      return `${date.getMonth() + 1}/${date.getDate()}`
+    })
+    const salesData = trendData.map(item => item.sales)
+    
+    const option = {
+      tooltip: {
+        trigger: 'axis',
+        formatter: (params: any) => {
+          return `${dates[params[0].dataIndex]}<br/>销量: ${params[0].value}件`
+        }
       },
-      areaStyle: {
-        opacity: 0.3
-      }
-    }]
+      xAxis: {
+        type: 'category',
+        data: dates,
+        boundaryGap: false
+      },
+      yAxis: {
+        type: 'value',
+        name: '销量'
+      },
+      series: [{
+        name: '销量',
+        data: salesData,
+        type: 'line',
+        smooth: true,
+        itemStyle: {
+          color: '#1890ff'
+        },
+        areaStyle: {
+          opacity: 0.3
+        }
+      }]
+    }
+    
+    trendChartInstance.setOption(option)
+  } catch (error: any) {
+    console.error('获取趋势数据失败:', error)
+    ElMessage.error(error.message || '获取趋势数据失败')
   }
-  
-  trendChartInstance.setOption(option)
 }
 
 // 渲染热力图
