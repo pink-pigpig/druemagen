@@ -31,11 +31,25 @@
         
         <el-row :gutter="20">
           <el-col :span="12">
+            <el-form-item label="药品分类" prop="category">
+              <el-select v-model="stockInForm.category" placeholder="请选择药品分类" style="width: 100%">
+                <el-option label="处方药" value="1" />
+                <el-option label="非处方药" value="2" />
+                <el-option label="中药饮片" value="3" />
+                <el-option label="保健品" value="4" />
+                <el-option label="医疗器械" value="5" />
+              </el-select>
+            </el-form-item>
+          </el-col>
+          
+          <el-col :span="12">
             <el-form-item label="生产厂家" prop="manufacturer">
               <el-input v-model="stockInForm.manufacturer" placeholder="请输入生产厂家" />
             </el-form-item>
           </el-col>
-          
+        </el-row>
+        
+        <el-row :gutter="20">
           <el-col :span="12">
             <el-form-item label="批号" prop="batchNumber">
               <el-input v-model="stockInForm.batchNumber" placeholder="请输入批号" />
@@ -136,16 +150,84 @@
         </div>
       </template>
       
-      <el-table :data="stockInRecords" style="width: 100%" border>
-        <el-table-column prop="drugName" label="药品名称" />
-        <el-table-column prop="drugCode" label="药品编码" />
-        <el-table-column prop="batchNumber" label="批号" />
-        <el-table-column prop="quantity" label="数量" />
-        <el-table-column prop="unit" label="单位" />
-        <el-table-column prop="unitPrice" label="单价" />
-        <el-table-column prop="totalPrice" label="总价" />
-        <el-table-column prop="supplier" label="供应商" />
-        <el-table-column prop="createTime" label="入库时间" />
+      <!-- 查询条件表单 -->
+      <el-form :model="queryForm" ref="queryFormRef" label-width="80px" class="query-form" style="margin-bottom: 20px;">
+        <el-row :gutter="20">
+          <el-col :span="6">
+            <el-form-item label="药品名称">
+              <el-input v-model="queryForm.drugName" placeholder="请输入药品名称" clearable />
+            </el-form-item>
+          </el-col>
+          <el-col :span="6">
+            <el-form-item label="药品编码">
+              <el-input v-model="queryForm.drugCode" placeholder="请输入药品编码" clearable />
+            </el-form-item>
+          </el-col>
+          <el-col :span="6">
+            <el-form-item label="生产厂家">
+              <el-input v-model="queryForm.manufacturer" placeholder="请输入生产厂家" clearable />
+            </el-form-item>
+          </el-col>
+          <el-col :span="6">
+            <el-form-item label="批号">
+              <el-input v-model="queryForm.batchNumber" placeholder="请输入批号" clearable />
+            </el-form-item>
+          </el-col>
+        </el-row>
+        <el-row :gutter="20">
+          <el-col :span="6">
+            <el-form-item label="开始日期">
+              <el-date-picker
+                v-model="queryForm.startDate"
+                type="date"
+                placeholder="请选择开始日期"
+                style="width: 100%"
+                value-format="YYYY-MM-DD"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="6">
+            <el-form-item label="结束日期">
+              <el-date-picker
+                v-model="queryForm.endDate"
+                type="date"
+                placeholder="请选择结束日期"
+                style="width: 100%"
+                value-format="YYYY-MM-DD"
+              />
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
+            <el-form-item label-width="0">
+              <el-button type="primary" @click="handleQuery">查询</el-button>
+              <el-button @click="handleResetQuery">重置</el-button>
+            </el-form-item>
+          </el-col>
+        </el-row>
+      </el-form>
+      
+      <el-table :data="stockInRecords" style="width: 100%" border v-loading="tableLoading">
+        <el-table-column prop="drugName" label="药品名称" min-width="120" show-overflow-tooltip />
+        <el-table-column prop="drugCode" label="药品编码" width="120" />
+        <el-table-column prop="batchNumber" label="批号" width="120" />
+        <el-table-column prop="quantity" label="数量" width="80" align="center" />
+        <el-table-column prop="unit" label="单位" width="80" align="center" />
+        <el-table-column prop="unitPrice" label="单价" width="100" align="center">
+          <template #default="{ row }">
+            ¥{{ row.unitPrice?.toFixed(2) || '0.00' }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="totalPrice" label="总价" width="100" align="center">
+          <template #default="{ row }">
+            ¥{{ (row.quantity * row.unitPrice)?.toFixed(2) || '0.00' }}
+          </template>
+        </el-table-column>
+        <el-table-column prop="supplier" label="供应商" min-width="120" show-overflow-tooltip />
+        <el-table-column label="入库时间" width="180" align="center">
+          <template #default="{ row }">
+            {{ formatStockInTime(row.stockInDate, row.createdAt) }}
+          </template>
+        </el-table-column>
       </el-table>
       
       <div class="pagination-container">
@@ -170,11 +252,26 @@ import axios from 'axios'
 
 // 定义表单引用
 const formRef = ref<FormInstance>()
+const queryFormRef = ref<FormInstance>()
+
+// 查询表单数据
+const queryForm = reactive({
+  drugName: '',
+  drugCode: '',
+  manufacturer: '',
+  batchNumber: '',
+  startDate: '',
+  endDate: ''
+})
+
+// 加载状态
+const tableLoading = ref(false)
 
 // 入库表单数据
 const stockInForm = reactive({
   drugName: '',
   drugCode: '',
+  category: '',  // 添加药品分类字段
   manufacturer: '',
   batchNumber: '',
   productionDate: '',
@@ -190,6 +287,7 @@ const stockInForm = reactive({
 const rules = {
   drugName: [{ required: true, message: '请输入药品名称', trigger: 'blur' }],
   drugCode: [{ required: true, message: '请输入药品编码', trigger: 'blur' }],
+  category: [{ required: true, message: '请选择药品分类', trigger: 'change' }],  // 添加分类验证
   batchNumber: [{ required: true, message: '请输入批号', trigger: 'blur' }],
   productionDate: [{ required: true, message: '请选择生产日期', trigger: 'change' }],
   expiryDate: [{ required: true, message: '请选择有效期', trigger: 'change' }],
@@ -211,22 +309,44 @@ const submitForm = async () => {
   await formRef.value.validate(async (valid) => {
     if (valid) {
       try {
-        // 这里调用实际的API接口
-        const response = await axios.post('/api/drugstore/stockin', {
+        console.log('=== 开始入库操作 ===')
+        console.log('提交数据:', {
           ...stockInForm,
           totalPrice: stockInForm.quantity * stockInForm.unitPrice
         })
         
-        if (response.data.success) {
-          ElMessage.success('药品入库成功')
+        // 这里调用实际的API接口
+        const response = await axios.post('/api/drugstore/stock-in', {
+          ...stockInForm,
+          totalPrice: stockInForm.quantity * stockInForm.unitPrice
+        })
+        
+        console.log('=== 入库API响应 ===')
+        console.log('完整响应:', response)
+        console.log('响应数据:', response.data)
+        console.log('响应状态:', response.status)
+        
+        // 按照后端Result包装格式检查成功状态
+        if (response.data && response.data.code === 1) {
+          ElMessage.success(response.data.data || '药品入库成功')
+          console.log('入库成功，准备重置表单和刷新记录')
           resetForm()
           fetchStockInRecords() // 重新加载入库记录
         } else {
-          ElMessage.error(response.data.message || '入库失败')
+          const errorMsg = response.data.msg || response.data.message || '入库失败'
+          console.error('入库失败:', errorMsg)
+          ElMessage.error(errorMsg)
         }
-      } catch (error) {
-        console.error('入库失败:', error)
-        ElMessage.error('入库操作失败，请稍后重试')
+      } catch (error: any) {
+        console.error('=== 入库请求异常 ===')
+        console.error('错误详情:', error)
+        if (error.response) {
+          console.error('响应状态:', error.response.status)
+          console.error('响应数据:', error.response.data)
+          ElMessage.error(error.response.data?.msg || error.response.data?.message || '入库操作失败，请稍后重试')
+        } else {
+          ElMessage.error('入库操作失败，请稍后重试')
+        }
       }
     } else {
       ElMessage.warning('请填写正确的表单信息')
@@ -240,22 +360,84 @@ const resetForm = () => {
   formRef.value.resetFields()
 }
 
+// 时间格式化函数
+const formatStockInTime = (stockInDate: string, createdAt: string) => {
+  // 优先使用createdAt字段
+  if (createdAt) {
+    // 如果是数组格式 [年,月,日,时,分,秒]
+    if (Array.isArray(createdAt)) {
+      const [year, month, day, hour, minute, second] = createdAt
+      return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')} ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:${String(second).padStart(2, '0')}`
+    }
+    // 如果是字符串格式
+    return createdAt
+  }
+  // 备选使用stockInDate
+  if (stockInDate) {
+    return stockInDate
+  }
+  return '-'
+}
+
+// 查询方法
+const handleQuery = () => {
+  console.log('=== 执行查询 ===')
+  console.log('查询条件:', queryForm)
+  currentPage.value = 1 // 重置到第一页
+  fetchStockInRecords()
+}
+
+// 重置查询
+const handleResetQuery = () => {
+  console.log('=== 重置查询 ===')
+  queryForm.drugName = ''
+  queryForm.drugCode = ''
+  queryForm.manufacturer = ''
+  queryForm.batchNumber = ''
+  queryForm.startDate = ''
+  queryForm.endDate = ''
+  currentPage.value = 1
+  fetchStockInRecords()
+}
+
 // 获取入库记录
 const fetchStockInRecords = async () => {
   try {
-    // 这里调用实际的API接口获取入库记录
-    const response = await axios.get('/api/drugstore/stockin/history', {
+    tableLoading.value = true
+    console.log('=== 获取入库记录 ===')
+    console.log('查询参数:', {
+      ...queryForm,
+      page: currentPage.value,
+      size: pageSize.value
+    })
+    
+    // 使用正确的API端点
+    const response = await axios.get('/api/drugstore/stock-in-records', {
       params: {
+        ...queryForm,
         page: currentPage.value,
         size: pageSize.value
       }
     })
     
-    stockInRecords.value = response.data.records
-    totalRecords.value = response.data.total
-  } catch (error) {
+    console.log('入库记录响应:', response.data)
+    
+    // 按照Result包装格式处理响应
+    if (response.data && response.data.code === 1) {
+      stockInRecords.value = response.data.data.records || []
+      totalRecords.value = response.data.data.total || 0
+      console.log('成功获取记录数:', stockInRecords.value.length)
+    } else {
+      throw new Error(response.data.msg || '获取入库记录失败')
+    }
+  } catch (error: any) {
     console.error('获取入库记录失败:', error)
-    ElMessage.error('获取入库记录失败')
+    ElMessage.error(error.response?.data?.msg || error.message || '获取入库记录失败')
+    // 设置默认值避免页面错误
+    stockInRecords.value = []
+    totalRecords.value = 0
+  } finally {
+    tableLoading.value = false
   }
 }
 
